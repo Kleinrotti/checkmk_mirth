@@ -1,0 +1,18 @@
+{
+    'author': u'Kleinrotti',
+    'description': u'A plugin to get information from Mirth Connect.\n'
+                    u'Please read the changelog (https://github.com/Kleinrotti/checkmk_mirth/releases) before updating!',
+    'download_url': 'https://github.com/Kleinrotti/checkmk_mirth',
+    'files': {
+        'agent_based': ['mirth_channel.py', 'mirth_server.py'],
+        'agents': ['special/agent_mirth'],
+        'web': ['plugins/wato/agent_mirth.py', 'plugins/wato/mirth_channel_parameters.py', 'plugins/metrics/mirth_channel_metrics.py'],
+        'checks': ['agent_mirth'],
+        'checkman': ['mirth_channel', 'mirth_server']
+    },
+    'name': 'mirth',
+    'title': u'Mirth Special Agent',
+    'version': '0.0.0',
+    'version.min_required': '2.0.0',
+    'version.packaged': '2.0.35'
+}

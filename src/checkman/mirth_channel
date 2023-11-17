@@ -1,0 +1,8 @@
+title: Mirth: Mirth Channel
+agents: mirth_channel
+license: GPLv2
+description:
+ This check monitors the channels in Mirth Connect.
+
+discovery:
+ One service is created for each channel found in Mirth Connect.

@@ -1,0 +1,8 @@
+title: Mirth: Mirth Server
+agents: mirth_server
+license: GPLv2
+description:
+ This check displays general information about Mirth Connect.
+
+discovery:
+ One service is created for the Mirth Connect Server.

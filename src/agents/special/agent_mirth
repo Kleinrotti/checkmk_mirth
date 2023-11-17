@@ -1,0 +1,448 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# (c) Kleinrotti <kleinrotti@saltcloud.de>
+
+# This is free software;  you can redistribute it and/or modify it
+# under the  terms of the  GNU General Public License  as published by
+# the Free Software Foundation in version 2.  check_mk is  distributed
+# in the hope that it will be useful, but WITHOUT ANY WARRANTY;  with-
+# out even the implied warranty of  MERCHANTABILITY  or  FITNESS FOR A
+# PARTICULAR PURPOSE. See the  GNU General Public License for more de-
+# ails.  You should have  received  a copy of the  GNU  General Public
+# License along with GNU Make; see the file  COPYING.  If  not,  write
+# to the Free Software Foundation, Inc., 51 Franklin St,  Fifth Floor,
+# Boston, MA 02110-1301 USA.
+
+import argparse
+from datetime import datetime
+import requests
+import json
+import urllib3
+import os
+import urllib3.exceptions
+from pathlib import Path
+from os.path import isfile, join
+
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class SubObject(object):
+    pass
+
+
+class Channel(object):
+    def __init__(self):
+        self.name = str()
+        self.id = str()
+        self.state = str()
+        self.channelState = str()
+        self.metric = Metric()
+
+
+class Metric(SubObject):
+    def __init__(self):
+        self.sent = str()
+        self.received = str()
+        self.filtered = str()
+        self.error = str()
+        self.queued = str()
+
+
+class MirthInfo(object):
+    def __init__(self):
+        self.id = str()
+        self.activated = str()
+        self.online = str()
+        self.expirationDate = str()
+        self.version = str()
+
+
+class LogMessage(object):
+    def __init__(self):
+        self.severity = str()
+        self.message = str()
+        self.date = None
+
+
+mirth_log_states = {
+    'INFO': 'I',
+    'ERROR': 'C',
+    'WARNING': 'W',
+    'Disconnected': 'C',
+    'Idle': 'I',
+    'Connected': 'I',
+    'Connecting': 'I',
+    'Receiving': 'I',
+    'Info': 'I',
+    'Waiting for Response': 'W',
+    'Sending': 'I',
+    'Polling': 'I',
+    'Writing': 'I'
+}
+
+
+def request(apiUrlSuffix: str, header: str = {"X-Requested-With": "checkmk_mirth", "Accept": "application/json"}):
+    """Perform a GET request to the Mirth Connect API endpoint
+    """
+    req = requests.get(f"{mirth_url}{apiUrlSuffix}", headers=header, auth=(username, secret), verify=verify_ssl)
+    if debug:
+        print(f"------Debug output-------\n{req.text}")
+    return (req.text, req.status_code)
+
+
+def request_channels():
+    """Request all Mirth channels.
+
+    Returns
+    -------
+    ``json``
+       The channels as json object.
+    """
+    req = request("/channels/idsAndNames")[0]
+    json_raw = json.loads(req)
+    return json_raw['map']['entry']
+
+
+def request_channel_statistics(id: str):
+    """Request statistics for a Mirth channel.
+
+    Parameters
+    ----------
+    id : ``str``
+       The id of the Mirth channel.
+
+    Returns
+    -------
+    ``json``
+       The channel statistics as json object.
+    """
+    req = request(f"/channels/{id}/statistics")[0]
+    json_raw = json.loads(req)
+    return json_raw['channelStatistics']
+
+
+def request_channel_state(id: str):
+    """Request a Mirth channel state.
+
+    Parameters
+    ----------
+    id : ``str``
+       The id of the Mirth channel.
+
+    Returns
+    -------
+    ``str``
+       The channel state as string.
+    """
+    req = json.loads(request(f"/channels/{id}/status")[0])
+    try:
+        state = req['dashboardStatus']['state']
+    except KeyError:
+        state = "Not deployed"
+    return state
+
+
+def request_channel_connection_state(id: str):
+    """Request a Mirth channel connection state.
+
+    Parameters
+    ----------
+    id : ``str``
+       The id of the Mirth channel.
+
+    Returns
+    -------
+    ``str``
+       The channel connection state as string.
+    """
+    headers = {"X-Requested-With": "checkmk_mirth", "Accept": "text/plain"}
+    state = request(f"/extensions/dashboardstatus/channelStates/{id}", headers)
+    if state[1] == 404:
+        return "Not deployed"
+    else:
+        return state[0]
+
+
+def request_server_log():
+    """Request the Mirth server logs.
+
+    Returns
+    -------
+    ``json``
+       The server logs as json object.
+    """
+    req = request(f"/extensions/serverlog?fetchSize={log_fetch_size}")[0]
+    return json.loads(req)['list']['com.mirth.connect.plugins.serverlog.ServerLogItem']
+
+
+def request_connection_log():
+    """Request the Mirth connection logs.
+
+    Returns
+    -------
+    ``json``
+       The connection logs as json object.
+    """
+    req = request(f"/extensions/dashboardstatus/connectionLogs?fetchSize={log_fetch_size}")[0]
+    return json.loads(req)['linked-list']['com.mirth.connect.plugins.dashboardstatus.ConnectionLogItem']
+
+
+def request_serverId():
+    """Request the Mirth server id.
+
+    Returns
+    -------
+    ``str``
+       The id as string.
+    """
+    header = {"X-Requested-With": "checkmk_mirth", "Accept": "text/plain"}
+    return request("/server/id", header)[0]
+
+
+def request_license():
+    """Request Mirth license information.
+
+    Returns
+    -------
+    ``json``
+       A deserialized json object.
+    """
+    req = request("/server/licenseInfo")[0]
+    return json.loads(req)["com.mirth.connect.model.LicenseInfo"]
+
+
+def request_version():
+    """Request the Mirth Connect version.
+
+    Returns
+    -------
+    ``str``
+       The json response as string.
+    """
+    header = {"X-Requested-With": "checkmk_mirth", "Accept": "text/plain"}
+    return request("/server/version", header)[0]
+
+
+def output(objects: list, sectionName: str):
+    """
+    Output checkmk data section.
+
+    This function prints every variable in the object and subobject
+
+    Parameters
+    ----------
+    objects : ``list``
+        A list of objects
+    sectionName: ``str``
+        Name of the checkmk section
+    """
+    print(f"<<<{sectionName}:sep(124)>>>")
+    for object in objects:
+        lst = []
+        for attribute, value in object.__dict__.items():
+            if isinstance(value, SubObject):
+                for attribute, value2 in value.__dict__.items():
+                    lst.append(value2.__str__())
+            elif value is not None:
+                lst.append(value.__str__())
+        print("|".join(lst))
+
+
+def process_server_info():
+    """Requests general Mirth server information and combines them to a single object.
+
+
+    Returns
+    -------
+    ``MirthInfo``
+        A MirthInfo object
+    """
+    license = request_license()
+
+    info = MirthInfo()
+    info.id = request_serverId()
+    info.version = request_version()
+    info.activated = license["activated"]
+    info.online = license["online"]
+    try:
+        info.expirationDate = license["expirationDate"]
+    except KeyError:
+        info.expirationDate = "-"
+    return info
+
+
+def process_server_log(logs):
+    """Processes the server logs and prints them in the logwatch section.
+
+    Parameters
+    ----------
+    logs : ``json``
+       The server logs as json object.
+    """
+    print("<<<logwatch>>>")
+    print("[[[Mirth Server Events]]]")
+    current_date = datetime.utcnow()
+    for log in logs:
+        d = datetime.strptime(log['date'], '%Y-%m-%d %H:%M:%S.%f %Z')
+        delta_minutes = (current_date - d).total_seconds() / 60
+        state_file = tmp_dir.joinpath("server_event_" + log['date'])
+        # if the event is not older than 10 minutes the event will be created
+        if delta_minutes < 10:
+            # if no state file is created yet the event will be created
+            if not state_file.exists():
+                print(f"{mirth_log_states[log['level']]} {log['message']}")
+                # create the state file, this prevent that an event is created multiple times
+                state_file.touch()
+        # if the event is older than 10 minutes it wont be created and the state file will be deleted
+        else:
+            state_file.unlink(missing_ok=True)
+
+
+def process_connection_log(logs):
+    """Processes the connection logs and prints them in the logwatch section.
+
+    Parameters
+    ----------
+    logs : ``json``
+       The connection logs as json object.
+    """
+    print("<<<logwatch>>>")
+    print("[[[Mirth Connection Events]]]")
+    current_date = datetime.now()
+    for log in logs:
+        d = datetime.strptime(log['dateAdded'], '%Y-%m-%d %H:%M:%S.%f')
+        delta_minutes = (current_date - d).total_seconds() / 60
+        state_file = tmp_dir.joinpath("connection_event_" + log['dateAdded'])
+        # if the event is not older than 10 minutes the event will be created
+        if delta_minutes < 10:
+            # if no state file is created yet the event will be created
+            if not state_file.exists():
+                # if the log level it not in the default settings the event gets logged as Info
+                try:
+                    print(f"{mirth_log_states[log['eventState']]} {log['connectorType']} -> {log['eventState']}")
+                except KeyError:
+                    print(f"I {log['connectorType']} -> {log['eventState']}")
+                # create the state file, this prevent that an event is created multiple times
+                state_file.touch()
+        # if the event is older than 10 minutes it wont be created and the state file will be deleted
+        else:
+            state_file.unlink(missing_ok=True)
+
+
+def process_channels(channels) -> list[Channel]:
+    lst = []
+    for c in channels:
+        channel = Channel()
+        statistics = request_channel_statistics(c['string'][0])
+        channel.state = request_channel_state(c['string'][0])
+        channel.channelState = request_channel_connection_state(c['string'][0])
+        channel.id = c['string'][0]
+        channel.name = c['string'][1]
+        current_metric = Metric()
+        current_metric.sent = statistics['sent']
+        current_metric.received = statistics['received']
+        current_metric.error = statistics['error']
+        current_metric.filtered = statistics['filtered']
+        current_metric.queued = statistics['queued']
+
+        # Mirth only provides total values and not metrics per time unit, so it gets calculated below
+        # and the values are written to a temporary file, one file per channel
+        tmp_file = tmp_dir.joinpath(f"last_metric_{channel.id}")
+        if tmp_file.exists():
+            # read the last metric from the previous check
+            last_metric = json.loads(tmp_file.read_text())
+            # write the current metric to the file
+            tmp_file.write_text(json.dumps(current_metric.__dict__))
+            # loop through each variable and check if the value changed
+            for attribute, value in current_metric.__dict__.items():
+                # if the new value is greater than the last, calculate the difference which is the packets per check interval
+                if value > last_metric[attribute]:
+                    current_metric.__dict__[attribute] = value - last_metric[attribute]
+                # if the new value is smaller or even with the last, the current value is set to 0
+                elif value <= last_metric[attribute]:
+                    current_metric.__dict__[attribute] = 0
+        else:
+            # if no metrics file exists yet, one gets created with 0 for all metric variables to avoid a spike in the graph
+            tmp_file.write_text(json.dumps(current_metric.__dict__))
+            for attribute, value in current_metric.__dict__.items():
+                current_metric.__dict__[attribute] = 0
+        channel.metric = current_metric
+        lst.append(channel)
+    return lst
+
+
+def cleanup_event_files():
+    """Clean up old event files in the temporary directory.
+
+    Files older than 60 minutes will be deleted.
+    """
+    files = [f for f in os.listdir(tmp_dir) if isfile(join(tmp_dir, f))]
+    current_date = datetime.now()
+    for f in files:
+        # only cleanup event files
+        time = None
+        if f.startswith("connection_event"):
+            time = datetime.strptime(f.split('_')[2], '%Y-%m-%d %H:%M:%S.%f')
+        elif f.startswith("server_event"):
+            time = datetime.strptime(f.split('_')[2], '%Y-%m-%d %H:%M:%S.%f %Z')
+        else:
+            continue
+        delta_minutes = (current_date - time).total_seconds() / 60
+        if delta_minutes > 60:
+            os.remove(tmp_dir.joinpath(f))
+
+
+def main(args):
+    global verify_ssl, ip, username, secret, port, debug, mirth_url, log_fetch_size
+    global tmp_dir, log_services
+    tmp_dir = Path(
+        os.getenv("OMD_ROOT", "/"), "tmp/check_mk/special_agent_mirth/"
+    )
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    ip = args.ip
+    verify_ssl = args.ssl
+    username = args.username
+    secret = args.secret
+    port = args.port
+    debug = args.debug
+    log_fetch_size = args.log
+    log_services = args.log_services
+    mirth_url = f"https://{ip}:{port}/api"
+    channels = process_channels(request_channels())
+    output(channels, "mirth_channel")
+    output([process_server_info()], "mirth_server")
+    if log_services:
+        process_server_log(request_server_log())
+        process_connection_log(request_connection_log())
+        cleanup_event_files()
+
+
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument(
+    '-i', '--ip', help="IP address or FQDN of the Mirth API endpoint"
+)
+arg_parser.add_argument(
+    '-u', '--username', help="Username for the Mirth API"
+)
+arg_parser.add_argument(
+    '-s', '--secret', help="Secret/Password for the Mirth API"
+)
+arg_parser.add_argument(
+    '-p', '--port', help="Port"
+)
+arg_parser.add_argument(
+    '-v', '--ssl', help="SSL verification, True or False", default=False, action='store_true'
+)
+arg_parser.add_argument(
+    '-l', '--log', help="Specifies the maximum number of log items to fetch"
+)
+arg_parser.add_argument(
+    '-ls', '--log_services', help="Fetch Mirth log events", default=False, action="store_true"
+)
+arg_parser.add_argument(
+    '-d', '--debug', help="Enable debugging which outputs the received json responses", action='store_true'
+)
+args = arg_parser.parse_args()
+main(args)
