@@ -27,11 +27,11 @@ jobs:
       - name: Set current release version
         run: sed -i 's#0.0.0#${{ env.RELEASE_VERSION }}#' src/package
       - name: Setup links
-        run: .devcontainer/symlink.sh
+        run: chmod +x .devcontainer/symlink.sh && .devcontainer/symlink.sh
       - name: Update GITHUB_PATH
         run: echo "/omd/sites/cmk/bin" >> $GITHUB_PATH
       - name: Build Extension
-        run: .devcontainer/build.sh
+        run: chmod +x .devcontainer/build.sh && .devcontainer/build.sh
 
       - name: Release files
         uses: softprops/action-gh-release@v1
