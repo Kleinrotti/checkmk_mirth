@@ -12,4 +12,3 @@ mkdir -p $OMD_ROOT/local/lib/python3/cmk/base/cee/plugins
 ln -sv $WORKSPACE/src/bakery $OMD_ROOT/local/lib/python3/cmk/base/cee/plugins/bakery
 
 htpasswd -b $OMD_ROOT/etc/htpasswd cmkadmin cmkadmin
-chmod +x $OMD_ROOT/local/share/check_mk/agents/special/*
