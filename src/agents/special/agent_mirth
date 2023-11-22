@@ -332,14 +332,36 @@ def process_connection_log(logs):
 
 
 def process_channels(channels) -> list[Channel]:
+    """Processes the json channel response from Mirth.
+
+    Parameters
+    ----------
+    channels : ``json``
+       The 'entry' part of the channel json response.
+
+    Returns
+    -------
+    ``list[Channel]``
+        A list of Mirth channel objects
+    """
     lst = []
     for c in channels:
         channel = Channel()
-        statistics = request_channel_statistics(c['string'][0])
-        channel.state = request_channel_state(c['string'][0])
-        channel.channelState = request_channel_connection_state(c['string'][0])
-        channel.id = c['string'][0]
-        channel.name = c['string'][1]
+
+        # work around, if only one channel exists in Mirth the json response is no longer an array
+        # check if it's an object rather than an array
+        if c == 'string':
+            id = c[0]
+            name = c[1]
+        else:
+            id = c['string'][0]
+            name = c['string'][1]
+
+        statistics = request_channel_statistics(id)
+        channel.state = request_channel_state(id)
+        channel.channelState = request_channel_connection_state(id)
+        channel.id = id
+        channel.name = name
         current_metric = Metric()
         current_metric.sent = statistics['sent']
         current_metric.received = statistics['received']
