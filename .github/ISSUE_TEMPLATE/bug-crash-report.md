@@ -24,6 +24,9 @@ If applicable, add screenshots to help explain your problem.
  - Edition: [e.g. Enterprise]
  - Version [e.g. 2.1.0p4]
 
+**Plugin (please complete the following information):**
+ - Version [e.g. 1.0.0]
+
 **Mirth Connect (please complete the following information):**
  - Mirth Host OS: [e.g. CentOS]
  - Version [e.g. 4.4.1]
