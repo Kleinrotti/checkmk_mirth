@@ -57,12 +57,12 @@ def _parameter_valuespec_mirth_channel():
             (
                 "disconnected",
                 MonitoringState(
-                    title=_("State when connection is disconncted"),
+                    title=_("State when connection is disconnected"),
                     default_value=2,
                 ),
             ),
             (
-                "not deployed",
+                "undeployed",
                 MonitoringState(
                     title=_("State when a channel is not deployed"),
                     default_value=1,

@@ -56,7 +56,7 @@ mirth_channel_factory_settings = {
     'paused': 1,
     'idle': 0,
     'disconnected': 2,
-    'not deployed': 1,
+    'undeployed': 1,
     'mirth_channel_statistics': {
         'mirth_channel_error': [10, 20],
         'mirth_channel_queued': [40, 70]
@@ -107,7 +107,10 @@ def check_mirth_channel(item, params, section: Section) -> CheckResult:
     )
     states = []
     states.append(State(params[channel.state.lower()]))
-    text = f"Channel status: {channel.state}, Connection status: {channel.channelState}"
+    if channel.state.lower() == "undeployed":
+        text = "Channel is not deployed"
+    else:
+        text = f"Channel status: {channel.state}, Connection status: {channel.channelState}"
 
     if channel.queued >= levels_queued[0]:
         states.append(State.WARN)

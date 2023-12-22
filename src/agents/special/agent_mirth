@@ -37,7 +37,7 @@ class Channel(object):
         self.name = str()
         self.id = str()
         self.state = str()
-        self.channelState = str()
+        self.connectionState = str()
         self.metric = Metric()
 
 
@@ -89,6 +89,8 @@ def request(apiUrlSuffix: str, header: str = {"X-Requested-With": "checkmk_mirth
     req = requests.get(f"{mirth_url}{apiUrlSuffix}", headers=header, auth=(username, secret), verify=verify_ssl)
     if debug:
         print(f"------Debug output-------\n{req.text}")
+    if req.status_code != 200:
+        raise Exception(req.text)
     return (req.text, req.status_code)
 
 
@@ -100,9 +102,9 @@ def request_channels():
     ``json``
        The channels as json object.
     """
-    req = request("/channels/idsAndNames")[0]
+    req = request("/channels/statuses?includeUndeployed=true")[0]
     json_raw = json.loads(req)
-    return json_raw['map']['entry']
+    return json_raw['list']['dashboardStatus']
 
 
 def request_channel_statistics(id: str):
@@ -121,27 +123,6 @@ def request_channel_statistics(id: str):
     req = request(f"/channels/{id}/statistics")[0]
     json_raw = json.loads(req)
     return json_raw['channelStatistics']
-
-
-def request_channel_state(id: str):
-    """Request a Mirth channel state.
-
-    Parameters
-    ----------
-    id : ``str``
-       The id of the Mirth channel.
-
-    Returns
-    -------
-    ``str``
-       The channel state as string.
-    """
-    req = json.loads(request(f"/channels/{id}/status")[0])
-    try:
-        state = req['dashboardStatus']['state']
-    except KeyError:
-        state = "Not deployed"
-    return state
 
 
 def request_channel_connection_state(id: str):
@@ -331,7 +312,7 @@ def process_connection_log(logs):
             state_file.unlink(missing_ok=True)
 
 
-def process_channels(channels) -> list[Channel]:
+def process_channels(channelJson) -> list[Channel]:
     """Processes the json channel response from Mirth.
 
     Parameters
@@ -345,21 +326,25 @@ def process_channels(channels) -> list[Channel]:
         A list of Mirth channel objects
     """
     lst = []
+    channels = []
+    # work around, if only one channel exists in Mirth the json response is no longer an array
+    # check if it's an array, if not one gets created
+    if not isinstance(channelJson, list):
+        channels.append(channelJson)
+    else:
+        channels = channelJson
+
     for c in channels:
         channel = Channel()
+        id = c['channelId']
+        name = c['name']
+        channel.state = c['state']
 
-        # work around, if only one channel exists in Mirth the json response is no longer an array
-        # check if it's an object rather than an array
-        if c == 'string':
-            id = c[0]
-            name = c[1]
+        if channel.state.lower() == "undeployed":
+            channel.connectionState = channel.state
         else:
-            id = c['string'][0]
-            name = c['string'][1]
-
+            channel.connectionState = request_channel_connection_state(id)
         statistics = request_channel_statistics(id)
-        channel.state = request_channel_state(id)
-        channel.channelState = request_channel_connection_state(id)
         channel.id = id
         channel.name = name
         current_metric = Metric()
