@@ -26,48 +26,84 @@ from cmk.gui.valuespec import Dictionary, MonitoringState, Tuple, Integer
 def _parameter_valuespec_mirth_channel():
     return Dictionary(
         elements=[
-            (
-                "started",
-                MonitoringState(
-                    title=_("State when channel is started"),
-                    default_value=0,
+            ("mirth_channel_states",
+                Dictionary(
+                    title = "Parameters for Mirth Channel states",
+                    elements = [
+                        (
+                            "started",
+                            MonitoringState(
+                                title=_("State when channel is started"),
+                                default_value=0,
+                            )
+                        ),
+                        (
+                            "starting",
+                            MonitoringState(
+                                title=_("State when channel is starting"),
+                                default_value=0,
+                            )
+                        ),
+                        (
+                            "paused",
+                            MonitoringState(
+                                title=_("State when channel is paused"),
+                                default_value=1,
+                            ),
+                        ),
+                        (
+                            "pausing",
+                            MonitoringState(
+                                title=_("State when channel is pausing"),
+                                default_value=1,
+                            )
+                        ),
+                        (
+                            "stopped",
+                            MonitoringState(
+                                title=_("State when channel is stopped"),
+                                default_value=2,
+                            ),
+                        ),
+                        (
+                            "stopping",
+                            MonitoringState(
+                                title=_("State when channel is stopping"),
+                                default_value=2,
+                            )
+                        ),
+                        (
+                            "deploying",
+                            MonitoringState(
+                                title=_("State when channel is deploying"),
+                                default_value=0,
+                            )
+                        ),
+                        (
+                            "undeployed",
+                            MonitoringState(
+                                title=_("State when a channel is undeployed"),
+                                default_value=1,
+                            ),
+                        ),
+                        (
+                            "undeploying",
+                            MonitoringState(
+                                title=_("State when channel is undeploying"),
+                                default_value=1,
+                            )
+                        ),
+                        (
+                            "unknown",
+                            MonitoringState(
+                                title=_("State when channel is unknown"),
+                                default_value=2,
+                            )
+                        )
+                    ],
+                    optional_keys=[]
                 )
-            ),
-            (
-                "paused",
-                MonitoringState(
-                    title=_("State when channel is paused"),
-                    default_value=1,
-                ),
-            ),
-            (
-                "stopped",
-                MonitoringState(
-                    title=_("State when channel is stopped"),
-                    default_value=2,
-                ),
-            ),
-            (
-                "idle",
-                MonitoringState(
-                    title=_("State when connection is idle"),
-                    default_value=0,
-                ),
-            ),
-            (
-                "disconnected",
-                MonitoringState(
-                    title=_("State when connection is disconnected"),
-                    default_value=2,
-                ),
-            ),
-            (
-                "undeployed",
-                MonitoringState(
-                    title=_("State when a channel is not deployed"),
-                    default_value=1,
-                ),
-            ),
+             ),
             ("mirth_channel_statistics",
                 Dictionary(
                     title = "Parameters for Mirth Statistics",
@@ -87,9 +123,10 @@ def _parameter_valuespec_mirth_channel():
                                 Integer(title = "Critical at", default_value = 70),
                             ])),
                     ],
+                    optional_keys=[]
                 ),
              ),
-        ],
+        ]
     )
 
 
