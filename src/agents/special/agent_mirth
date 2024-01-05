@@ -91,7 +91,7 @@ def request(apiUrlSuffix: str, header: str = {"X-Requested-With": "checkmk_mirth
         print(f"------Debug output-------\n{req.text}")
     if req.status_code != 200:
         raise Exception(req.text)
-    return (req.text, req.status_code)
+    return req.text
 
 
 def request_channels():
@@ -102,9 +102,9 @@ def request_channels():
     ``json``
        The channels as json object.
     """
-    req = request("/channels/statuses?includeUndeployed=true")[0]
+    req = request("/channels/statuses?includeUndeployed=true")
     json_raw = json.loads(req)
-    return json_raw['list']['dashboardStatus']
+    return json_raw['list']
 
 
 def request_channel_statistics(id: str):
@@ -120,7 +120,7 @@ def request_channel_statistics(id: str):
     ``json``
        The channel statistics as json object.
     """
-    req = request(f"/channels/{id}/statistics")[0]
+    req = request(f"/channels/{id}/statistics")
     json_raw = json.loads(req)
     return json_raw['channelStatistics']
 
@@ -140,10 +140,7 @@ def request_channel_connection_state(id: str):
     """
     headers = {"X-Requested-With": "checkmk_mirth", "Accept": "text/plain"}
     state = request(f"/extensions/dashboardstatus/channelStates/{id}", headers)
-    if state[1] == 404:
-        return "Not deployed"
-    else:
-        return state[0]
+    return state
 
 
 def request_server_log():
@@ -154,8 +151,8 @@ def request_server_log():
     ``json``
        The server logs as json object.
     """
-    req = request(f"/extensions/serverlog?fetchSize={log_fetch_size}")[0]
-    return json.loads(req)['list']['com.mirth.connect.plugins.serverlog.ServerLogItem']
+    req = request(f"/extensions/serverlog?fetchSize={log_fetch_size}")
+    return json.loads(req)['list']
 
 
 def request_connection_log():
@@ -166,8 +163,8 @@ def request_connection_log():
     ``json``
        The connection logs as json object.
     """
-    req = request(f"/extensions/dashboardstatus/connectionLogs?fetchSize={log_fetch_size}")[0]
-    return json.loads(req)['linked-list']['com.mirth.connect.plugins.dashboardstatus.ConnectionLogItem']
+    req = request(f"/extensions/dashboardstatus/connectionLogs?fetchSize={log_fetch_size}")
+    return json.loads(req)['linked-list']
 
 
 def request_serverId():
@@ -179,7 +176,7 @@ def request_serverId():
        The id as string.
     """
     header = {"X-Requested-With": "checkmk_mirth", "Accept": "text/plain"}
-    return request("/server/id", header)[0]
+    return request("/server/id", header)
 
 
 def request_license():
@@ -190,7 +187,7 @@ def request_license():
     ``json``
        A deserialized json object.
     """
-    req = request("/server/licenseInfo")[0]
+    req = request("/server/licenseInfo")
     return json.loads(req)["com.mirth.connect.model.LicenseInfo"]
 
 
@@ -203,7 +200,7 @@ def request_version():
        The json response as string.
     """
     header = {"X-Requested-With": "checkmk_mirth", "Accept": "text/plain"}
-    return request("/server/version", header)[0]
+    return request("/server/version", header)
 
 
 def output(objects: list, sectionName: str):
@@ -264,8 +261,12 @@ def process_server_log(logs):
     """
     print("<<<logwatch>>>")
     print("[[[Mirth Server Events]]]")
+    # if there are no logs the list is null
+    if logs is None:
+        return
+
     current_date = datetime.utcnow()
-    for log in logs:
+    for log in logs['com.mirth.connect.plugins.serverlog.ServerLogItem']:
         d = datetime.strptime(log['date'], '%Y-%m-%d %H:%M:%S.%f %Z')
         delta_minutes = (current_date - d).total_seconds() / 60
         state_file = tmp_dir.joinpath("server_event_" + log['date'])
@@ -291,8 +292,12 @@ def process_connection_log(logs):
     """
     print("<<<logwatch>>>")
     print("[[[Mirth Connection Events]]]")
+    # if there are no logs the list is null
+    if logs is None:
+        return
+
     current_date = datetime.now()
-    for log in logs:
+    for log in logs['com.mirth.connect.plugins.dashboardstatus.ConnectionLogItem']:
         d = datetime.strptime(log['dateAdded'], '%Y-%m-%d %H:%M:%S.%f')
         delta_minutes = (current_date - d).total_seconds() / 60
         state_file = tmp_dir.joinpath("connection_event_" + log['dateAdded'])
@@ -327,12 +332,16 @@ def process_channels(channelJson) -> list[Channel]:
     """
     lst = []
     channels = []
+    # if no channel exists, the list is null
+    if channelJson is None:
+        return lst
+
     # work around, if only one channel exists in Mirth the json response is no longer an array
     # check if it's an array, if not one gets created
-    if not isinstance(channelJson, list):
-        channels.append(channelJson)
+    if not isinstance(channelJson['dashboardStatus'], list):
+        channels.append(channelJson['dashboardStatus'])
     else:
-        channels = channelJson
+        channels = channelJson['dashboardStatus']
 
     for c in channels:
         channel = Channel()
