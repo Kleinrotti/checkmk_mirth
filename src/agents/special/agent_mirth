@@ -423,7 +423,7 @@ def main(args):
     secret = args.secret
     port = args.port
     debug = args.debug
-    log_fetch_size = args.log
+    log_fetch_size = args.log or 10
     log_services = args.log_services
     mirth_url = f"https://{ip}:{port}/api"
     channels = process_channels(request_channels())
