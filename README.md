@@ -3,6 +3,7 @@
 ## Tested with Mirth Connect versions 3.12 and 4.4.0
 
 ## How to use
+
 - Install the mkp package in Checkmk. [HowTo](https://docs.checkmk.com/latest/en/mkps.html)
 - Activate the special agent with the rule "Mirth Special Agent Configuration"
 - If you want to verify the ssl certificate, the CA certificate has to be imported on the checkmk operating system
@@ -18,6 +19,7 @@
 - Change channel parameters with the rule "Mirth Channel Parameters"
 
 ## Debugging problems
+
 If you experience errors, try to run the special agent in the console and check the output
 
 Sample command: ```python3 agent_mirth -i <mirth_ip> -u <username> -s <secret> -p 8443 -ls```
